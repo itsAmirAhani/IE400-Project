@@ -18,6 +18,17 @@ def location_checker(seeker_location, job_location, max_commute_distance):
         return True
     return False
 
+def difference_calculator(job_questionnare, seeker_answers):
+    difference = 0
+    for i in job_questionnare:
+        check_flg = False
+        for j in seeker_answers:
+            if i == j:
+                check_flg = True
+        if check_flg == False:
+            difference += 1
+    return difference / 20
+
 # Read data
 seekers = pd.read_csv('seekers.csv')
 jobs = pd.read_csv('jobs.csv')
@@ -107,3 +118,30 @@ for i in seekers['Seeker_ID']:
         job_row = jobs[jobs['Job_ID'] == j]
         location_constr = 1 if int(job_row['Is_Remote'].iloc[0]) == 1 or location_checker(seeker_row['Location'].iloc[0], job_row['Location'].iloc[0], int(seeker_row['Max_Commute_Distance'].iloc[0])) == True else 0
         part2_model.addConstr(x[i, j] <= location_constr)
+
+w = 75 
+M_w = 210 # I don't know how to import the value from part 1
+
+part2_model.addConstr((sum(x[i, j] * int(jobs[jobs['Job_ID'] == j]['Priority_Weight'].iloc[0]) for i in seekers['Seeker_ID'] for j in jobs['Job_ID'])) >= M_w * w / 100)
+
+
+max_dissimilarity = part2_model.addVar(vtype=GRB.INTEGER, name="max_dissimilarity")
+d={}
+for i in seekers['Seeker_ID']:
+    for j in jobs['Job_ID']:
+        d[i, j] = part2_model.addVar(vtype=GRB.INTEGER, name=f"d_{i}_{j}") # Integer variable.
+
+for i in seekers['Seeker_ID']:
+    for j in jobs['Job_ID']:
+        seeker_row = seekers[seekers['Seeker_ID'] == i]
+        job_row = jobs[jobs['Job_ID'] == j]
+        dissimilarity_constr = difference_calculator(ast.literal_eval(job_row['Questionnaire'].iloc[0]), ast.literal_eval(seeker_row['Questionnaire'].iloc[0]))
+        part2_model.addConstr(d[i, j] == dissimilarity_constr)
+        
+        
+for i in seekers['Seeker_ID']:
+    for j in jobs['Job_ID']:
+        part2_model.addConstr(max_dissimilarity >= d[i,j] * x[i,j])
+
+part2_model.setObjective(max_dissimilarity, GRB.MINIMIZE)
+part2_model.optimize()
