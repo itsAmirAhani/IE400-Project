@@ -20,40 +20,43 @@ def location_checker(seeker_location, job_location, max_commute_distance):
 
 def difference_calculator(job_questionnaire, seeker_answers):
     difference = 0
-    for i in range(20):
+    for i in range(len(job_questionnaire)): 
         difference += abs(job_questionnaire[i] - seeker_answers[i])
-    return difference / 20
+    return difference / len(job_questionnaire) if len(job_questionnaire) > 0 else 0
 
 # Load data
 seekers = pd.read_csv('seekers.csv')
 jobs = pd.read_csv('jobs.csv')
 location_distances = pd.read_csv('location_distances.csv', index_col=0)
 
-# Map experience levels
+# Conversion of experience levels to integers 
 for i in seekers['Seeker_ID']:
     seeker_row = seekers[seekers['Seeker_ID'] == i]
-    if seeker_row['Experience_Level'].iloc[0] == 'Entry-level':
+    level = seeker_row['Experience_Level'].iloc[0]
+    if level == 'Entry-level':
         seekers.loc[seekers['Seeker_ID'] == i, 'Experience_Level'] = 0
-    elif seeker_row['Experience_Level'].iloc[0] == 'Mid-level':
+    elif level == 'Mid-level':
         seekers.loc[seekers['Seeker_ID'] == i, 'Experience_Level'] = 1
-    elif seeker_row['Experience_Level'].iloc[0] == 'Senior':
+    elif level == 'Senior':
         seekers.loc[seekers['Seeker_ID'] == i, 'Experience_Level'] = 2
-    elif seeker_row['Experience_Level'].iloc[0] == 'Lead':
+    elif level == 'Lead':
         seekers.loc[seekers['Seeker_ID'] == i, 'Experience_Level'] = 3
-    elif seeker_row['Experience_Level'].iloc[0] == 'Manager':
+    elif level == 'Manager':
         seekers.loc[seekers['Seeker_ID'] == i, 'Experience_Level'] = 4
 for j in jobs['Job_ID']:
     job_row = jobs[jobs['Job_ID'] == j]
-    if job_row['Required_Experience_Level'].iloc[0] == 'Entry-level':
+    level = job_row['Required_Experience_Level'].iloc[0]
+    if level == 'Entry-level':
         jobs.loc[jobs['Job_ID'] == j, 'Required_Experience_Level'] = 0
-    elif job_row['Required_Experience_Level'].iloc[0] == 'Mid-level':
+    elif level == 'Mid-level':
         jobs.loc[jobs['Job_ID'] == j, 'Required_Experience_Level'] = 1
-    elif job_row['Required_Experience_Level'].iloc[0] == 'Senior':
+    elif level == 'Senior':
         jobs.loc[jobs['Job_ID'] == j, 'Required_Experience_Level'] = 2
-    elif job_row['Required_Experience_Level'].iloc[0] == 'Lead':
+    elif level == 'Lead':
         jobs.loc[jobs['Job_ID'] == j, 'Required_Experience_Level'] = 3
-    elif job_row['Required_Experience_Level'].iloc[0] == 'Manager':
+    elif level == 'Manager':
         jobs.loc[jobs['Job_ID'] == j, 'Required_Experience_Level'] = 4
+
 
 # Load Mw from part1
 with open("part1_result.txt", "r") as f:
@@ -65,50 +68,79 @@ results = []
 for w in omega_values:
     print(f"\nRunning Part 2 for ω = {w}")
     part2_model = gp.Model(f"part2_model_w{w}")
-    part2_model.setParam("OutputFlag", 0)
+    part2_model.setParam("OutputFlag", 0) 
 
     # Variables
     x = {}
-    d = {}
+    d = {} 
     for i in seekers['Seeker_ID']:
         for j in jobs['Job_ID']:
             x[i, j] = part2_model.addVar(vtype=GRB.BINARY, name=f"x_{i}_{j}")
-            d[i, j] = part2_model.addVar(vtype=GRB.CONTINUOUS, name=f"d_{i}_{j}")
-    max_dissimilarity = part2_model.addVar(vtype=GRB.CONTINUOUS, name="max_dissimilarity")
+            d[i, j] = part2_model.addVar(vtype=GRB.CONTINUOUS, name=f"d_{i}_{j}", lb=0)
+    max_dissimilarity = part2_model.addVar(vtype=GRB.CONTINUOUS, name="max_dissimilarity", lb=0)
 
-    # Constraint 1: Each seeker assigned at most one job
+    # Constraint for assigning at most 1 job to every seeker.
     for i in seekers['Seeker_ID']:
         part2_model.addConstr(sum(x[i, j] for j in jobs['Job_ID']) <= 1)
 
-    # Constraint 2: Job capacity
+    # Constraint for assigning at most the number of available positions for the job to seekers.
     for j in jobs['Job_ID']:
-        capacity = int(jobs[jobs['Job_ID'] == j]['Num_Positions'].iloc[0])
-        part2_model.addConstr(sum(x[i, j] for i in seekers['Seeker_ID']) <= capacity)
+        job_row_for_capacity = jobs[jobs['Job_ID'] == j] # Use a distinct name
+        num_positions = int(job_row_for_capacity['Num_Positions'].iloc[0])
+        part2_model.addConstr(sum(x[i, j] for i in seekers['Seeker_ID']) <= num_positions)
 
-    # Compatibility and dissimilarity constraints
+    # Constraints for compatibility, d[i,j] definition, and max_dissimilarity linkage
     for i in seekers['Seeker_ID']:
-        seeker = seekers[seekers['Seeker_ID'] == i].iloc[0]
+        seeker_row = seekers[seekers['Seeker_ID'] == i]
         for j in jobs['Job_ID']:
-            job = jobs[jobs['Job_ID'] == j].iloc[0]
+            job_row = jobs[jobs['Job_ID'] == j]
 
-            # Compatibility checks
-            job_type_ok = seeker['Desired_Job_Type'] == job['Job_Type']
-            salary_ok = int(job['Salary_Range_Min']) <= int(seeker['Min_Desired_Salary']) <= int(job['Salary_Range_Max'])
-            skill_ok = skill_checker(ast.literal_eval(job['Required_Skills']), ast.literal_eval(seeker['Skills']))
-            exp_ok = seeker['Experience_Level'] >= job['Required_Experience_Level']
-            location_ok = job['Is_Remote'] == 1 or location_checker(seeker['Location'], job['Location'], seeker['Max_Commute_Distance'])
+            # Constraint for checking the job types match
+            job_type_match_constr = 1 if seeker_row['Desired_Job_Type'].iloc[0] == job_row['Job_Type'].iloc[0] else 0
+            part2_model.addConstr(x[i, j] <= job_type_match_constr)
 
-            if all([job_type_ok, salary_ok, skill_ok, exp_ok, location_ok]):
-                seeker_q = ast.literal_eval(seeker['Questionnaire'])
-                job_q = ast.literal_eval(job['Questionnaire'])
-                diff = difference_calculator(job_q, seeker_q)
-                part2_model.addConstr(d[i, j] == diff)
-                part2_model.addConstr(max_dissimilarity >= d[i, j] * x[i, j])
+            # Constraint for checking the salary expectations match
+            salary_match_constr = 1 if int(job_row['Salary_Range_Min'].iloc[0]) <= int(seeker_row['Min_Desired_Salary'].iloc[0]) <= int(job_row['Salary_Range_Max'].iloc[0]) else 0
+            part2_model.addConstr(x[i, j] <= salary_match_constr)
+
+            # Constraint for checking whether seeker has the skillset
+            seeker_skillset = ast.literal_eval(seeker_row['Skills'].iloc[0])
+            job_required_skills = ast.literal_eval(job_row['Required_Skills'].iloc[0])
+            skill_match_constr = 1 if skill_checker(job_required_skills, seeker_skillset) else 0
+            part2_model.addConstr(x[i, j] <= skill_match_constr)
+
+            # Constraint for the experience level
+            exp_match_constr = 1 if int(seeker_row['Experience_Level'].iloc[0]) >= int(job_row['Required_Experience_Level'].iloc[0]) else 0
+            part2_model.addConstr(x[i, j] <= exp_match_constr)
+
+            # Constraint for location
+            location_match_constr = 1 if int(job_row['Is_Remote'].iloc[0]) == 1 or \
+                                       location_checker(seeker_row['Location'].iloc[0],
+                                                        job_row['Location'].iloc[0],
+                                                        seeker_row['Max_Commute_Distance'].iloc[0]) else 0
+            part2_model.addConstr(x[i, j] <= location_match_constr)
+
+            # Determine if the pair is fundamentally compatible based on all Python checks
+            is_compatible = (job_type_match_constr == 1 and
+                                           salary_match_constr == 1 and
+                                           skill_match_constr == 1 and
+                                           exp_match_constr == 1 and
+                                           location_match_constr == 1)
+
+            # Calculate questionnaire difference
+            seeker_questionnaire = ast.literal_eval(seeker_row['Questionnaire'].iloc[0])
+            job_questionnaire = ast.literal_eval(job_row['Questionnaire'].iloc[0])
+            actual_dissimilarity_value = difference_calculator(job_questionnaire, seeker_questionnaire)
+
+            # Set d[i,j] based on fundamental compatibility
+            if is_compatible:
+                part2_model.addConstr(d[i, j] == actual_dissimilarity_value)
             else:
-                part2_model.addConstr(x[i, j] == 0)
                 part2_model.addConstr(d[i, j] == 0)
 
-    # ω constraint: weighted priority must be ≥ ω% of Mw
+            part2_model.addConstr(max_dissimilarity >= d[i, j] * x[i, j])
+
+    # Constraint for ω: total weighted priority must be ≥ ω% of Mw
     part2_model.addConstr(
         sum(x[i, j] * int(jobs[jobs['Job_ID'] == j]['Priority_Weight'].iloc[0])
             for i in seekers['Seeker_ID'] for j in jobs['Job_ID']) >= M_w * w / 100
@@ -118,24 +150,29 @@ for w in omega_values:
     part2_model.setObjective(max_dissimilarity, GRB.MINIMIZE)
     part2_model.optimize()
 
-    if part2_model.Status == GRB.OPTIMAL:
-        print(f"ω = {w} → max dissimilarity = {max_dissimilarity.X:.4f}")
-        results.append((w, max_dissimilarity.X))
-    else:
-        print(f"ω = {w} → no feasible solution")
-        results.append((w, None))
 
-# make the Plot and save it
-df = pd.DataFrame(results, columns=["omega", "max_dissimilarity"])
-df.to_csv("omega_vs_dissimilarity.csv", index=False)
+    current_max_dissim = max_dissimilarity.X
+    print(f"ω = {w} → max dissimilarity = {current_max_dissim:.4f}")
+    results.append((w, current_max_dissim))
 
-df.dropna(inplace=True)
-plt.plot(df["omega"], df["max_dissimilarity"], marker="o")
+
+# make the plot
+df_results = pd.DataFrame(results, columns=["omega", "max_dissimilarity"])
+
+# save the reuslts
+df_results.to_csv("omega_vs_dissimilarity.csv", index=False)
+
+# make the plot
+plt.figure(figsize=(10, 6))
+plt.plot(df_results["omega"], df_results["max_dissimilarity"], marker="o", linestyle="-", color="b")
 plt.xlabel("ω (% of Mw)")
 plt.ylabel("Max Dissimilarity")
-plt.title("ω vs. Max Dissimilarity")
+plt.title("Pareto Frontier: ω vs. Max Dissimilarity")
 plt.grid(True)
 plt.savefig("omega_vs_dissimilarity.png")
 plt.show()
 
-print("The Minimum Maximized dissimilarity is achieved when ω is 70 & 75 ")
+# print the optimal omega value
+min_dissim_value = df_results['max_dissimilarity'].min()
+best_omega_values = df_results[df_results['max_dissimilarity'] == min_dissim_value]['omega'].tolist()
+print(f"\nThe minimum max dissimilarity ({min_dissim_value:.4f}) is achieved when ω is/are: {best_omega_values}")
