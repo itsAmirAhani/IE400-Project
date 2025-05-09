@@ -20,12 +20,8 @@ def location_checker(seeker_location, job_location, max_commute_distance):
 
 def difference_calculator(job_questionnare, seeker_answers):
     difference = 0
-    for i in job_questionnare:
-        check_flg = False
-        for j in seeker_answers:
-            if i == j:
-                check_flg = True
-        if check_flg == False:
+    for i in range (0, 20):
+        if job_questionnare[i] != seeker_answers[i]:
             difference += 1
     return difference / 20
 
@@ -124,24 +120,30 @@ M_w = 210 # I don't know how to import the value from part 1
 
 part2_model.addConstr((sum(x[i, j] * int(jobs[jobs['Job_ID'] == j]['Priority_Weight'].iloc[0]) for i in seekers['Seeker_ID'] for j in jobs['Job_ID'])) >= M_w * w / 100)
 
-
-max_dissimilarity = part2_model.addVar(vtype=GRB.INTEGER, name="max_dissimilarity")
+max_dissimilarity = part2_model.addVar(vtype=GRB.CONTINUOUS, name="max_dissimilarity")
 d={}
 for i in seekers['Seeker_ID']:
     for j in jobs['Job_ID']:
-        d[i, j] = part2_model.addVar(vtype=GRB.INTEGER, name=f"d_{i}_{j}") # Integer variable.
+        d[i, j] = part2_model.addVar(vtype=GRB.CONTINUOUS, name=f"d_{i}_{j}") # Continuous variable, dissimilarity score.
 
+# Filling out dissimilarity table
 for i in seekers['Seeker_ID']:
     for j in jobs['Job_ID']:
         seeker_row = seekers[seekers['Seeker_ID'] == i]
         job_row = jobs[jobs['Job_ID'] == j]
-        dissimilarity_constr = difference_calculator(ast.literal_eval(job_row['Questionnaire'].iloc[0]), ast.literal_eval(seeker_row['Questionnaire'].iloc[0]))
+        job_questionnaire = ast.literal_eval(job_row['Questionnaire'].iloc[0])
+        seeker_questionnaire = ast.literal_eval(seeker_row['Questionnaire'].iloc[0])
+        dissimilarity_constr = difference_calculator(job_questionnaire, seeker_questionnaire)
         part2_model.addConstr(d[i, j] == dissimilarity_constr)
         
-        
+
 for i in seekers['Seeker_ID']:
     for j in jobs['Job_ID']:
         part2_model.addConstr(max_dissimilarity >= d[i,j] * x[i,j])
 
 part2_model.setObjective(max_dissimilarity, GRB.MINIMIZE)
 part2_model.optimize()
+
+for i, j in x:
+    if x[i, j].X > 0.5:
+        print(f"Seeker {i} assigned to Job {j} with dissimilarity {d[i,j].X}")
