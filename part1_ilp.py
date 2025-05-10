@@ -119,6 +119,6 @@ for (i, j), var in x.items():
     if var.X > 0.5:  # x[i, j] == 1
         print(f"Seeker {i} assigned to Job {j}")
 
-
 with open("part1_result.txt", "w") as f:
     f.write(str(part1_model.ObjVal))
+    

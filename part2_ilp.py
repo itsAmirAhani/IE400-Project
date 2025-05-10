@@ -62,10 +62,10 @@ for j in jobs['Job_ID']:
 with open("part1_result.txt", "r") as f:
     M_w = float(f.read())
 
-omega_values = [70, 75, 80, 85, 90, 95, 100]
+w_values = [70, 75, 80, 85, 90, 95, 100]
 results = []
 
-for w in omega_values:
+for w in w_values:
     print(f"\nRunning Part 2 for ω = {w}")
     part2_model = gp.Model(f"part2_model_w{w}")
     part2_model.setParam("OutputFlag", 0) 
@@ -100,8 +100,8 @@ for w in omega_values:
             part2_model.addConstr(x[i, j] <= job_type_match_constr)
 
             # Constraint for checking the salary expectations match
-            salary_match_constr = 1 if int(job_row['Salary_Range_Min'].iloc[0]) <= int(seeker_row['Min_Desired_Salary'].iloc[0]) <= int(job_row['Salary_Range_Max'].iloc[0]) else 0
-            part2_model.addConstr(x[i, j] <= salary_match_constr)
+            salary_constr = 1 if int(job_row['Salary_Range_Min'].iloc[0]) <= int(seeker_row['Min_Desired_Salary'].iloc[0]) <= int(job_row['Salary_Range_Max'].iloc[0]) else 0
+            part2_model.addConstr(x[i, j] <= salary_constr)
 
             # Constraint for checking whether seeker has the skillset
             seeker_skillset = ast.literal_eval(seeker_row['Skills'].iloc[0])
@@ -122,7 +122,7 @@ for w in omega_values:
 
             # Determine if the pair is fundamentally compatible based on all Python checks
             is_compatible = (job_type_match_constr == 1 and
-                                           salary_match_constr == 1 and
+                                           salary_constr == 1 and
                                            skill_match_constr == 1 and
                                            exp_match_constr == 1 and
                                            location_match_constr == 1)
@@ -167,7 +167,7 @@ plt.figure(figsize=(10, 6))
 plt.plot(df_results["omega"], df_results["max_dissimilarity"], marker="o", linestyle="-", color="b")
 plt.xlabel("ω (% of Mw)")
 plt.ylabel("Max Dissimilarity")
-plt.title("Pareto Frontier: ω vs. Max Dissimilarity")
+plt.title("ω vs. Max Dissimilarity")
 plt.grid(True)
 plt.savefig("omega_vs_dissimilarity.png")
 plt.show()
